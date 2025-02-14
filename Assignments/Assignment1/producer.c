@@ -102,11 +102,15 @@ void InitShm(int bufSize, int itemCnt)
      // Write code here to create a shared memory block and map it to gShmPtr  
      // Use the above name.
      int shared_mem = shm_open(name, O_CREAT | O_RDWR, 0666);
+     if (shared_mem == -1) {
+            printf("Shared memory failed\n");
+            exit(-1);
+     }
      ftruncate(shared_mem, SHM_SIZE);
      // **Extremely Important: map the shared memory block for both reading and writing 
      // Use PROT_READ | PROT_WRITE
      gShmPtr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,shared_mem, 0);
-	
+     memset(gShmPtr, 0, SHM_SIZE);
     // Write code here to set the values of the four integers in the header
     // Just call the functions provided below, like this
     SetBufSize(bufSize); 	
@@ -134,7 +138,7 @@ void Producer(int bufSize, int itemCnt, int randSeed)
     // where i is the item number, val is the item value, in is its index in the bounded buffer
     for (int i = 0; i < itemCnt; i++) {
         while ((GetIn() + 1) % GetBufSize() == GetOut()) {
-            // Buffer is full, waiting for consumer to consume
+            // wait
         }
         in = GetIn();
         out = GetOut();
@@ -184,7 +188,7 @@ int GetHeaderVal(int i)
 void SetHeaderVal(int i, int val)
 {
     // Write the implementation
-    void* ptr = gShmPrt + i * sizeof(int);
+    void* ptr = gShmPtr + i * sizeof(int);
     memcpy(ptr, &val, sizeof(int));
 }
 
@@ -218,14 +222,17 @@ void WriteAtBufIndex(int indx, int val)
 {
         // Skip the four-integer header and go to the given index 
         void* ptr = gShmPtr + 4*sizeof(int) + indx*sizeof(int);
-	memcpy(ptr, &val, sizeof(int));
+	    memcpy(ptr, &val, sizeof(int));
 }
 
 // Read the val at the given index in the bounded buffer
 int ReadAtBufIndex(int indx)
 {
         // Write the implementation
- 
+        int val;
+        void* ptr = gShmPtr + 4 * sizeof(int) + indx * sizeof(int);
+        memcpy(&val, ptr, sizeof(int));
+        return val;
 }
 
 // Get a random number in the range [x, y]
