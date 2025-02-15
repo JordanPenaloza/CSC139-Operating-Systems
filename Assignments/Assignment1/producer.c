@@ -1,9 +1,9 @@
 /*
 CSC139 
 First Assignment
-Penaloza, Jordan
-Section #
-OSs Tested on: such as Linux, Mac, etc.
+Penaloza Jordan
+Section #01
+OSs Tested on: ECS Linux Server
 */
 
 #include <stdio.h>
@@ -14,6 +14,7 @@ OSs Tested on: such as Linux, Mac, etc.
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 
 // Size of shared memory block
@@ -59,10 +60,11 @@ int main(int argc, char* argv[])
 	randSeed = atoi(argv[3]);
 	
 	// Write code to check the validity of the command-line arguments
-        if(bufSize < 2 || bufSize > 450 || itemCnt < 1) {
-            printf("Invalid CLI arguments\n");
-            exit(1);
-        }
+	if (bufSize < 2 || bufSize > 450 || itemCnt < 1) {
+		printf("Invalid input\n");
+                return 1;
+	}
+
         // Function that creates a shared memory segment and initializes its header
         InitShm(bufSize, itemCnt);        
 
@@ -95,28 +97,23 @@ int main(int argc, char* argv[])
 
 void InitShm(int bufSize, int itemCnt)
 {
-    int in = 0;
-    int out = 0;
-    const char *name = "OS_HW1_JordanPenaloza"; // Name of shared memory object to be passed to shm_open
+        int in = 0;
+        int out = 0;
+        const char *name = "OS_HW1_JordanPenaloza"; // Name of shared memory object to be passed to shm_open
 
      // Write code here to create a shared memory block and map it to gShmPtr  
      // Use the above name.
-     int shared_mem = shm_open(name, O_CREAT | O_RDWR, 0666);
-     if (shared_mem == -1) {
-            printf("Shared memory failed\n");
-            exit(-1);
-     }
-     ftruncate(shared_mem, SHM_SIZE);
+        int shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
      // **Extremely Important: map the shared memory block for both reading and writing 
      // Use PROT_READ | PROT_WRITE
-     gShmPtr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,shared_mem, 0);
-     memset(gShmPtr, 0, SHM_SIZE);
+        ftruncate(shm_fd, SHM_SIZE);
+        gShmPtr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     // Write code here to set the values of the four integers in the header
     // Just call the functions provided below, like this
-    SetBufSize(bufSize); 	
-    SetItemCnt(itemCnt);
-    SetIn(0);
-    SetOut(0);
+        SetBufSize(bufSize); 	
+        SetIn(0);
+        SetOut(0);
+        SetItemCnt(itemCnt);
        
 	   
 }
@@ -136,18 +133,22 @@ void Producer(int bufSize, int itemCnt, int randSeed)
     // Use the following print statement to report the production of an item:
     // printf("Producing Item %d with value %d at Index %d\n", i, val, in);
     // where i is the item number, val is the item value, in is its index in the bounded buffer
-    for (int i = 0; i < itemCnt; i++) {
-        while ((GetIn() + 1) % GetBufSize() == GetOut()) {
-            // wait
+    for(int i = 0; i < itemCnt; i++){
+        while((GetIn() + 1) % GetBufSize() == GetOut()) {
+                // Buffer is full, waiting for consumer
         }
-        in = GetIn();
-        out = GetOut();
-        int val = GetRand(2, 3200);
-        printf("Producing Item %d with value %d at Index %d\n", i, val, in);
-        WriteAtBufIndex(in, val);
+	in = GetIn();
+	out = GetOut();
+	int val = GetRand(2,3200);
+	printf("Producing Item %d with value %d at Index %d\n", i, val, in);
+	WriteAtBufIndex(in, val);
         in = (in + 1) % GetBufSize();
-        SetIn(in);
+	SetIn(in);
     }
+	
+	
+	
+    
      printf("Producer Completed\n");
 }
 
@@ -187,9 +188,9 @@ int GetHeaderVal(int i)
 // Set the ith value in the header
 void SetHeaderVal(int i, int val)
 {
-    // Write the implementation
-    void* ptr = gShmPtr + i * sizeof(int);
-    memcpy(ptr, &val, sizeof(int));
+       // Write the implementation
+       void* ptr = gShmPtr + i * sizeof(int);
+       memcpy(ptr, &val, sizeof(int));
 }
 
 // Get the value of shared variable "bufSize"
@@ -221,17 +222,17 @@ int GetOut()
 void WriteAtBufIndex(int indx, int val)
 {
         // Skip the four-integer header and go to the given index 
-        void* ptr = gShmPtr + 4*sizeof(int) + indx*sizeof(int);
-	    memcpy(ptr, &val, sizeof(int));
+        int* ptr = (int*)gShmPtr + 4 + indx;
+	memcpy(ptr, &val, sizeof(int));
 }
 
 // Read the val at the given index in the bounded buffer
 int ReadAtBufIndex(int indx)
 {
         // Write the implementation
-        int val;
-        void* ptr = gShmPtr + 4 * sizeof(int) + indx * sizeof(int);
-        memcpy(&val, ptr, sizeof(int));
+	int val;
+	int* ptr = (int*)gShmPtr + 4 + indx;
+	memcpy(&val, ptr, sizeof(int));
         return val;
 }
 
@@ -242,3 +243,4 @@ int GetRand(int x, int y)
 	r = x + r % (y-x+1);
         return r;
 }
+

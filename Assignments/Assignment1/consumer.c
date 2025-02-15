@@ -3,7 +3,7 @@ CSC139
 First Assignment
 Penaloza, Jordan
 Section #01
-OSs Tested on: Linux
+OSs Tested on: ECS Linux Server
 */
 
 #include <stdio.h>
@@ -45,15 +45,14 @@ int main()
      
      // Write code here to create a shared memory block and map it to gShmPtr
      // Use the above name
-     int shared_mem = shm_open(name,O_RDWR, 0666);
-     if (shared_mem == -1) {
+     // **Extremely Important: map the shared memory block for both reading and writing 
+     // Use PROT_READ | PROT_WRITE
+     int shm_fd = shm_open(name,O_RDWR, 0666);
+     if (shm_fd == -1) {
             printf("Shared memory failed\n");
             exit(-1);
      }
-     // **Extremely Important: map the shared memory block for both reading and writing 
-     // Use PROT_READ | PROT_WRITE
-     gShmPtr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,shared_mem, 0);
-
+     gShmPtr = mmap(0, SHM_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);
 
      // Write code here to read the four integers from the header of the shared memory block 
      // These are: bufSize, itemCnt, in, out
@@ -62,8 +61,9 @@ int main()
      itemCnt = GetItemCnt();
      in = GetIn();
      out = GetOut();
+	
      // Write code here to check that the consumer has read the right values: 
-     printf("Consumer reading: bufSize = %d\n",bufSize);
+     printf("Consumer reading: bufSize = %d, itemCnt = %d, in = %d, out = %d\n",bufSize, itemCnt, in, out);
 
      // Write code here to consume all the items produced by the producer
      // Use the functions provided below to get/set the values of shared variables in, out, bufSize
@@ -72,16 +72,19 @@ int main()
      // Use the following print statement to report the consumption of an item:
      // printf("Consuming Item %d with value %d at Index %d\n", i, val, out);
      // where i is the item number, val is the item value, out is its index in the bounded buffer
-    for (int i = 0; i < itemCnt; i++) {
-        while (GetIn() == GetOut()) {
-            // wait
+     for(int i = 0; i < itemCnt; i ++) {
+        while(GetIn() == GetOut()) {
+                // Waiting for things to consume
         }
+        in = GetIn();
+        out = GetOut();
         int val = ReadAtBufIndex(out);
         printf("Consuming Item %d with value %d at Index %d\n", i, val, out);
         out = (out + 1) % bufSize;
         SetOut(out);
+     }
 
-    }
+                
           
      // remove the shared memory segment 
      if (shm_unlink(name) == -1) {
@@ -151,8 +154,9 @@ int GetOut()
 void WriteAtBufIndex(int indx, int val)
 {
         // Write the implementation
-        void* ptr = gShmPtr + 4*sizeof(int) + indx*sizeof(int);
-	    memcpy(ptr, &val, sizeof(int));
+        int* ptr = (int*)gShmPtr + 4 + indx;
+	memcpy(ptr, &val, sizeof(int));
+
 }
 
 // Read the val at the given index in the bounded buffer
@@ -160,9 +164,9 @@ int ReadAtBufIndex(int indx)
 {
         // Write the implementation
         int val;
-        void* ptr = gShmPtr + 4 * sizeof(int) + indx * sizeof(int);
-        memcpy(&val, ptr, sizeof(int));
+	int* ptr = (int*)gShmPtr + 4 + indx;
+	memcpy(&val, ptr, sizeof(int));
         return val;
- 
 }
+
 
